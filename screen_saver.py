@@ -82,6 +82,43 @@ def write_screen(window, x, y, value, attribute):
     return len(value)
 
 
+class LargeFontDisplay:
+
+    def __init__(self, font):
+        self.font = font
+
+    def render(self, window, location, value, attribute=0):
+        offset = 0
+        for cell in range(len(value)):
+            try:
+                self.font.render(window, value[cell], attribute=attribute,
+                                 offset=(location[0], location[1] + offset))
+            except IndexError:
+                self.font.render(window, ' ', offset=(0, offset))
+            offset += self.font.size[0]
+
+
+class PixelFont:
+
+    FONT_DEFINITION_FILE = './pixel-font-14x10.json'
+
+    def __init__(self, size=(7, 7)):
+        self.size = size  # num rows x num cols
+        with open(PixelFont.FONT_DEFINITION_FILE, 'r') as file_obj:
+            self.font_def = json.load(file_obj)
+
+    def render(self, window, letter, attribute=0, offset=(0, 0)):
+        for row in range(self.size[0]):
+            for column in range(self.size[1]):
+                try:
+                    render_offset = int(self.font_def['glyphs'][letter]['offset'])
+                    if self.font_def['glyphs'][letter]['pixels'][row][column]:
+                        window.addch(render_offset + row + offset[0], column + offset[1], ' ',
+                                     curses.A_REVERSE + attribute)
+                except IndexError:
+                    pass
+
+
 def curses_main(stdscr):    
     stdscr.nodelay(True)
     stdscr.clear()
@@ -155,42 +192,5 @@ def curses_main(stdscr):
     stdscr.clear()
     curses.curs_set(True)
 
-
-class LargeFontDisplay:
-
-    def __init__(self, font):
-        self.font = font
-
-    def render(self, window, location, value, attribute=0):
-        offset = 0
-        for cell in range(len(value)):
-            try:
-                self.font.render(window, value[cell], attribute=attribute,
-                                 offset=(location[0], location[1] + offset))
-            except IndexError:
-                self.font.render(window, ' ', offset=(0, offset))
-            offset += self.font.size[0]
-
-
-class PixelFont:
-
-    FONT_DEFINITION_FILE = 'font.json'
-
-    def __init__(self, size=(7, 7)):
-        self.size = size  # num rows x num cols
-        with open(PixelFont.FONT_DEFINITION_FILE, 'r') as file_obj:
-            self.font_def = json.load(file_obj)
-
-    def render(self, window, letter, attribute=0, offset=(0, 0)):
-        for row in range(self.size[0]):
-            for column in range(self.size[1]):
-                try:
-                    render_offset = int(self.font_def['glyphs'][letter]['offset'])
-                    if self.font_def['glyphs'][letter]['pixels'][row][column]:
-                        window.addch(render_offset + row + offset[0], column + offset[1], ' ',
-                                     curses.A_REVERSE + attribute)
-                except IndexError:
-                    pass
-
-
-curses.wrapper(curses_main)
+if __name__ == "__main__":
+    curses.wrapper(curses_main)
