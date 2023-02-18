@@ -5,9 +5,11 @@ import socket
 import time
 import requests
 import datetime
+import json
+
 
 def kelvin_to_farenheight(temp_k):
-    return (temp_k - 273.15) * 9 / 5 + 32
+    return (temp_k - 273.15) * 9/5 + 32
 
 
 def hpa_to_hg(hpa):
@@ -25,10 +27,10 @@ def utc_to_local(utc, offset):
 class Weather:
     API_KEY = "687e52a4aa4828f3c8139ca794fd180c"
     FIELDS = (
-        'temp_f', 'feels_like_f', 'temp_min_f', 'temp_max_f', 'pressure_hg', 'humidity_pct',
+        'temp_f', 'feels_like_f', 'temp_min_f','temp_max_f', 'pressure_hg', 'humidity_pct',
         'wind_speed_mph', 'wind_direction_deg', 'cloud_cover_pct', 'time_zone_offset',
         'sunrise_utc', 'sunset_utc', 'location_name', 'last_update')
-
+    
     def __init__(self, location):
         self.location = location
         self.last_call = None
@@ -57,10 +59,8 @@ class Weather:
                 self.weather['wind_direction_deg'] = f"{weather_data['wind']['deg']:<3.0f}"
                 self.weather['cloud_cover_pct'] = f"{weather_data['clouds']['all']:<3d}"
                 self.weather['time_zone_offset'] = f"{weather_data['timezone']}"
-                self.weather['sunrise_utc'] = utc_to_local(weather_data['sys']['sunrise'],
-                                                           weather_data['timezone']).strftime('%Y-%m-%d %H:%M:%S')
-                self.weather['sunset_utc'] = utc_to_local(weather_data['sys']['sunset'],
-                                                          weather_data['timezone']).strftime('%Y-%m-%d %H:%M:%S')
+                self.weather['sunrise_utc'] = utc_to_local(weather_data['sys']['sunrise'], weather_data['timezone']).strftime('%Y-%m-%d %H:%M:%S')
+                self.weather['sunset_utc'] = utc_to_local(weather_data['sys']['sunset'], weather_data['timezone']).strftime('%Y-%m-%d %H:%M:%S')
                 self.weather['location_name'] = weather_data['name']
                 self.weather['last_update'] = self.last_update.strftime('%Y-%m-%d %H:%M:%S')
         except:
@@ -82,7 +82,7 @@ def write_screen(window, x, y, value, attribute):
     return len(value)
 
 
-def curses_main(stdscr):
+def curses_main(stdscr):    
     stdscr.nodelay(True)
     stdscr.clear()
     curses.curs_set(False)
@@ -93,6 +93,7 @@ def curses_main(stdscr):
     curses.init_pair(5, curses.COLOR_RED, curses.COLOR_BLACK)
     curses.init_pair(6, curses.COLOR_WHITE, curses.COLOR_BLACK)
     curses.init_pair(7, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+    large_font = LargeFontDisplay(PixelFont())
     weather = Weather([33.681944, -117.973056])
     next_update = 0
     while True:
@@ -116,9 +117,15 @@ def curses_main(stdscr):
         # Print the current weather
         time_to_next_call = max(0, next_update - (now - weather.last_call).total_seconds())
         width = write_screen(stdscr, x, y, f'{time_to_next_call:2.0f}', curses.color_pair(7))
-        x += width + 1
+        x +=  width + 1
+
+        # Print a field in large font
+        height, width = stdscr.getmaxyx()
+        location = (0, round(width / 2))
+        large_font.render(stdscr, location, f"{weather.weather['temp_f']}")
 
         if not time_to_next_call > 0:
+            stdscr.clear()
             next_update = 60
             weather.get_weather()
             x = 0
@@ -142,11 +149,48 @@ def curses_main(stdscr):
         # Wait for the user to press a key
         if stdscr.getch() != curses.ERR:
             break
-
+        
         time.sleep(0.5)
     # reset the console
     stdscr.clear()
     curses.curs_set(True)
+
+
+class LargeFontDisplay:
+
+    def __init__(self, font):
+        self.font = font
+
+    def render(self, window, location, value, attribute=0):
+        offset = 0
+        for cell in range(len(value)):
+            try:
+                self.font.render(window, value[cell], attribute=attribute,
+                                 offset=(location[0], location[1] + offset))
+            except IndexError:
+                self.font.render(window, ' ', offset=(0, offset))
+            offset += self.font.size[0]
+
+
+class PixelFont:
+
+    FONT_DEFINITION_FILE = 'font.json'
+
+    def __init__(self, size=(7, 7)):
+        self.size = size  # num rows x num cols
+        with open(PixelFont.FONT_DEFINITION_FILE, 'r') as file_obj:
+            self.font_def = json.load(file_obj)
+
+    def render(self, window, letter, attribute=0, offset=(0, 0)):
+        for row in range(self.size[0]):
+            for column in range(self.size[1]):
+                try:
+                    render_offset = int(self.font_def['glyphs'][letter]['offset'])
+                    if self.font_def['glyphs'][letter]['pixels'][row][column]:
+                        window.addch(render_offset + row + offset[0], column + offset[1], ' ',
+                                     curses.A_REVERSE + attribute)
+                except IndexError:
+                    pass
 
 
 curses.wrapper(curses_main)
